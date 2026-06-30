@@ -1,5 +1,19 @@
 # cron
 
+## Dona360
+
+Este projeto faz parte do sistema maior `Dona360`, composto por modulos separados que rodam como servicos independentes, mas compartilham a mesma base PostgreSQL `piloto`.
+
+Politica de banco:
+
+- cada modulo tem seu proprio usuario de aplicacao e schema principal;
+- todos os usuarios de aplicacao devem ser membros da role comum `piloto_app`;
+- `piloto_app` deve ter acesso de leitura e escrita a todos os schemas de negocio do banco `piloto`;
+- portanto, os modulos nao devem depender de isolamento por schema para acessar dados do Dona360.
+
+Modulo de agendamento de tarefas do Dona360.
+
+
 Servico Java/Jetty para agendar e executar chamadas HTTP em intervalos de minuto.
 
 ## Desenvolvimento
