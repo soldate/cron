@@ -59,7 +59,7 @@ public final class TaskExecutor {
     static Task loadTask(Connection conn, UUID taskId) throws Exception {
         String sql = """
             SELECT id, nome, url, metodo, headers::text, payload::text, tipo_agendamento,
-                   intervalo_minutos, timeout_segundos, max_tentativas, tentativas_feitas
+                   intervalo_minutos, timeout_segundos, max_tentativas, retry_intervalo_minutos, tentativas_feitas
             FROM cron.tarefa
             WHERE id = ? AND ativo = true
             """;
@@ -84,6 +84,7 @@ public final class TaskExecutor {
             rs.getObject("intervalo_minutos") == null ? null : rs.getInt("intervalo_minutos"),
             rs.getInt("timeout_segundos"),
             rs.getInt("max_tentativas"),
+            rs.getInt("retry_intervalo_minutos"),
             rs.getInt("tentativas_feitas")
         );
     }
@@ -146,11 +147,11 @@ public final class TaskExecutor {
 
         if ("unico".equals(task.scheduleType())) {
             active = !success && attempts < task.maxAttempts();
-            next = active ? LocalDateTime.now().plusMinutes(1).withSecond(0).withNano(0) : null;
+            next = active ? LocalDateTime.now().plusMinutes(task.retryIntervalMinutes()).withSecond(0).withNano(0) : null;
         } else if (success) {
             next = LocalDateTime.now().plusMinutes(task.intervalMinutes()).withSecond(0).withNano(0);
         } else if (attempts < task.maxAttempts()) {
-            next = LocalDateTime.now().plusMinutes(1).withSecond(0).withNano(0);
+            next = LocalDateTime.now().plusMinutes(task.retryIntervalMinutes()).withSecond(0).withNano(0);
         } else {
             next = LocalDateTime.now().plusMinutes(task.intervalMinutes()).withSecond(0).withNano(0);
             attempts = 0;
@@ -186,6 +187,7 @@ public final class TaskExecutor {
         Integer intervalMinutes,
         int timeoutSeconds,
         int maxAttempts,
+        int retryIntervalMinutes,
         int tentativasFeitas
     ) {}
 

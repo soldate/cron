@@ -71,6 +71,7 @@ public class CronServlet extends HttpServlet {
         String tipo = text(body, "tipo_agendamento", text(body, "tipoAgendamento", "intervalo"));
         int timeout = intValue(body, "timeout_segundos", intValue(body, "timeoutSegundos", 30));
         int maxTentativas = intValue(body, "max_tentativas", intValue(body, "maxTentativas", 1));
+        int retryIntervalo = intValue(body, "retry_intervalo_minutos", intValue(body, "retryIntervaloMinutos", 1));
         JsonNode headers = objectValue(body, "headers");
         JsonNode payload = objectValue(body, "payload");
         Integer intervalo = nullableInt(body, "intervalo_minutos", nullableInt(body, "intervaloMinutos", null));
@@ -93,8 +94,8 @@ public class CronServlet extends HttpServlet {
             badRequest(resp, "executar_em obrigatorio para tarefa unica");
             return;
         }
-        if (timeout < 1 || timeout > 300 || maxTentativas < 1 || maxTentativas > 20) {
-            badRequest(resp, "timeout ou max_tentativas fora do limite");
+        if (timeout < 1 || timeout > 300 || maxTentativas < 1 || maxTentativas > 20 || retryIntervalo < 1 || retryIntervalo > 1440) {
+            badRequest(resp, "timeout, max_tentativas ou retry_intervalo_minutos fora do limite");
             return;
         }
         if (proxima == null) proxima = "unico".equals(tipo) ? executarEm : LocalDateTime.now().withSecond(0).withNano(0);
@@ -102,8 +103,8 @@ public class CronServlet extends HttpServlet {
         String sql = """
             INSERT INTO cron.tarefa (
                 nome, url, metodo, headers, payload, tipo_agendamento, intervalo_minutos,
-                executar_em, proxima_execucao, timeout_segundos, max_tentativas
-            ) VALUES (?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?)
+                executar_em, proxima_execucao, timeout_segundos, max_tentativas, retry_intervalo_minutos
+            ) VALUES (?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
         try (Connection conn = Db.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -118,6 +119,7 @@ public class CronServlet extends HttpServlet {
             stmt.setTimestamp(9, Timestamp.valueOf(proxima));
             stmt.setInt(10, timeout);
             stmt.setInt(11, maxTentativas);
+            stmt.setInt(12, retryIntervalo);
             try (ResultSet rs = stmt.executeQuery()) {
                 rs.next();
                 ObjectNode out = MAPPER.createObjectNode();
@@ -132,7 +134,7 @@ public class CronServlet extends HttpServlet {
         String sql = """
             SELECT id, nome, url, metodo, headers, payload, tipo_agendamento, intervalo_minutos,
                    executar_em, proxima_execucao, ultima_execucao, ativo, timeout_segundos,
-                   max_tentativas, tentativas_feitas, criado_em, atualizado_em
+                   max_tentativas, retry_intervalo_minutos, tentativas_feitas, criado_em, atualizado_em
             FROM cron.tarefa
             ORDER BY criado_em DESC
             LIMIT 200
@@ -201,6 +203,7 @@ public class CronServlet extends HttpServlet {
         node.put("ativo", rs.getBoolean("ativo"));
         node.put("timeout_segundos", rs.getInt("timeout_segundos"));
         node.put("max_tentativas", rs.getInt("max_tentativas"));
+        node.put("retry_intervalo_minutos", rs.getInt("retry_intervalo_minutos"));
         node.put("tentativas_feitas", rs.getInt("tentativas_feitas"));
         putNullableTimestamp(node, "criado_em", rs, "criado_em");
         putNullableTimestamp(node, "atualizado_em", rs, "atualizado_em");

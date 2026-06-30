@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS cron.tarefa (
     ativo              BOOLEAN NOT NULL DEFAULT TRUE,
     timeout_segundos   INTEGER NOT NULL DEFAULT 30,
     max_tentativas     INTEGER NOT NULL DEFAULT 1,
+    retry_intervalo_minutos INTEGER NOT NULL DEFAULT 1,
     tentativas_feitas  INTEGER NOT NULL DEFAULT 0,
     criado_em          TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     atualizado_em      TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -28,8 +29,12 @@ CREATE TABLE IF NOT EXISTS cron.tarefa (
         (tipo_agendamento = 'unico' AND executar_em IS NOT NULL)
     ),
     CHECK (timeout_segundos BETWEEN 1 AND 300),
-    CHECK (max_tentativas BETWEEN 1 AND 20)
+    CHECK (max_tentativas BETWEEN 1 AND 20),
+    CHECK (retry_intervalo_minutos BETWEEN 1 AND 1440)
 );
+
+ALTER TABLE cron.tarefa
+    ADD COLUMN IF NOT EXISTS retry_intervalo_minutos INTEGER NOT NULL DEFAULT 1;
 
 CREATE TABLE IF NOT EXISTS cron.execucao (
     id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),

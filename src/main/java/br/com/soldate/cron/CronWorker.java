@@ -50,7 +50,7 @@ public class CronWorker {
         int batchSize = readInt("WORKER_BATCH_SIZE", AppDefaults.WORKER_BATCH_SIZE);
         String sql = """
             SELECT id, nome, url, metodo, headers::text, payload::text, tipo_agendamento,
-                   intervalo_minutos, timeout_segundos, max_tentativas, tentativas_feitas
+                   intervalo_minutos, timeout_segundos, max_tentativas, retry_intervalo_minutos, tentativas_feitas
             FROM cron.tarefa
             WHERE ativo = true
               AND proxima_execucao IS NOT NULL
