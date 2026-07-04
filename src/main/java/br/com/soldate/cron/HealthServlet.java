@@ -38,6 +38,7 @@ public class HealthServlet extends HttpServlet {
                     return;
                 }
             } catch (SQLException ex) {
+                JavaErrorLog.save(req, ex);
                 resp.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
                 resp.getWriter().write("{\"status\":\"error\",\"db\":\"fail\"}");
                 return;

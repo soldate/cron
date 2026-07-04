@@ -38,6 +38,7 @@ public class CronServlet extends HttpServlet {
                 notFound(resp);
             }
         } catch (Exception ex) {
+            JavaErrorLog.save(req, ex);
             fail(resp, ex);
         } finally {
             Debug.endRequest();
@@ -57,6 +58,7 @@ public class CronServlet extends HttpServlet {
                 notFound(resp);
             }
         } catch (Exception ex) {
+            JavaErrorLog.save(req, ex);
             fail(resp, ex);
         } finally {
             Debug.endRequest();
