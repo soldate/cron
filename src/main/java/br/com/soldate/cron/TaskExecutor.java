@@ -53,6 +53,9 @@ public final class TaskExecutor {
         int durationMs = (int) Math.min(Integer.MAX_VALUE, Duration.ofNanos(System.nanoTime() - started).toMillis());
         finishExecution(executionId, durationMs, success, status, error, responseBody, responseHeaders);
         updateTaskAfterExecution(task, success);
+        if (!success && finalFailure(task)) {
+            notifyFinalFailure(task, status, error);
+        }
         return executionId;
     }
 
@@ -169,6 +172,70 @@ public final class TaskExecutor {
             stmt.setObject(4, task.id());
             stmt.executeUpdate();
         }
+    }
+
+    private static boolean finalFailure(Task task) {
+        return "unico".equals(task.scheduleType()) && task.tentativasFeitas() + 1 >= task.maxAttempts();
+    }
+
+    private static void notifyFinalFailure(Task task, Integer status, String error) {
+        try (Connection conn = Db.getConnection()) {
+            var admins = adminUsers(conn);
+            if (admins.isEmpty()) return;
+            conn.setAutoCommit(false);
+            try {
+                UUID notificacaoId;
+                try (PreparedStatement stmt = conn.prepareStatement("""
+                    INSERT INTO alerta.notificacao (titulo, mensagem, url, escopo)
+                    VALUES (?, ?, NULL, ?)
+                    RETURNING id
+                    """)) {
+                    stmt.setString(1, "Falha em tarefa automatica");
+                    stmt.setString(2, "A tarefa \"" + task.name() + "\" esgotou as tentativas. Status HTTP: "
+                        + (status == null ? "-" : status) + ". Erro: " + (error == null ? "-" : error));
+                    stmt.setString(3, admins.size() == 1 ? "usuario" : "lista");
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        rs.next();
+                        notificacaoId = (UUID) rs.getObject("id");
+                    }
+                }
+                try (PreparedStatement stmt = conn.prepareStatement("""
+                    INSERT INTO rel.notificacao_usuario (notificacao_id, usuario_id, status)
+                    VALUES (?, ?, 'pendente')
+                    ON CONFLICT DO NOTHING
+                    """)) {
+                    for (UUID admin : admins) {
+                        stmt.setObject(1, notificacaoId);
+                        stmt.setObject(2, admin);
+                        stmt.addBatch();
+                    }
+                    stmt.executeBatch();
+                }
+                conn.commit();
+            } catch (Exception ex) {
+                conn.rollback();
+                throw ex;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace(System.err);
+        }
+    }
+
+    private static java.util.List<UUID> adminUsers(Connection conn) throws Exception {
+        java.util.List<UUID> admins = new java.util.ArrayList<>();
+        try (PreparedStatement stmt = conn.prepareStatement("""
+            SELECT DISTINCT u.id
+            FROM login.usuario u
+            JOIN login.usuario_perfil up ON up.usuario_id = u.id
+            JOIN login.perfil p ON p.id = up.perfil_id
+            WHERE u.ativo = true AND p.nome = 'Administrador do Sistema'
+            """);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) admins.add((UUID) rs.getObject("id"));
+        }
+        return admins;
     }
 
     private static String limit(String value, int maxChars) {
